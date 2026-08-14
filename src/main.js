@@ -10,9 +10,9 @@ import {
 registerSW({ immediate: true });
 
 const $ = (id) => document.getElementById(id);
-const ui = Object.fromEntries(['toast','fileInput','video','stage','cropBox','emptyHint','fileInfo','playButton','seekBar','playbackTime','rotateLeft','rotateRight','rotationReset','rotationLabel','cropToggle','cropReset','cropPanel','cropLeft','cropRight','cropTop','cropBottom','cropLeftLabel','cropRightLabel','cropTopLabel','cropBottomLabel','cropInfo','cropApply','trimStart','trimEnd','startLabel','endLabel','startHere','endHere','trimReset','analyzeAudio','audioResult','audioMode','exportPreset','presetInfo','exportButton','cancelButton','saveButton','progress','progressLabel','status','puzzlePanel','puzzleGrid','puzzleScore','puzzleBest','puzzleReset'].map(id => [id,$(id)]));
+const ui = Object.fromEntries(['toast','fileInput','video','stage','cropBox','emptyHint','fileInfo','playButton','seekBar','playbackTime','rotateLeft','rotateRight','rotationReset','rotationLabel','cropToggle','cropReset','cropPanel','cropLeft','cropRight','cropTop','cropBottom','cropLeftLabel','cropRightLabel','cropTopLabel','cropBottomLabel','cropInfo','cropApply','trimStart','trimEnd','startLabel','endLabel','startHere','endHere','trimReset','analyzeAudio','audioResult','audioMode','exportPreset','presetInfo','exportButton','cancelButton','saveButton','progress','progressLabel','status','puzzlePanel','puzzleGrid','puzzleScore','puzzleBest','puzzleReset','puzzleCelebration','puzzleClearDetail'].map(id => [id,$(id)]));
 const state = { file:null, input:null, url:null, duration:0, width:0, height:0, fps:0, rotation:0, cropEnabled:false, audioStats:null, conversion:null, busy:false, outputFile:null, outputUrl:null, puzzle:null };
-let toastTimer=null;
+let toastTimer=null,puzzleCelebrationTimer=null;
 
 function showToast(text){
   clearTimeout(toastTimer); ui.toast.textContent=text; ui.toast.classList.add('show');
@@ -85,13 +85,19 @@ function renderPuzzle(){
   ui.puzzleScore.textContent=`${game.moves}手・${game.clears}クリア`;const best=Number(localStorage.getItem('veilframe_lights_best'))||0;ui.puzzleBest.textContent=`最高記録: ${best?best+'手':'--'}`;
 }
 function newPuzzle(keepClears=true){
+  clearTimeout(puzzleCelebrationTimer);ui.puzzleCelebration.classList.remove('show');ui.puzzleCelebration.hidden=true;
   const clears=keepClears&&state.puzzle?state.puzzle.clears:0,board=Array(25).fill(false);let changes=10+Math.floor(Math.random()*8);
   while(changes--)togglePuzzleCell(Math.floor(Math.random()*25),board);if(!board.some(Boolean))togglePuzzleCell(12,board);
   state.puzzle={board,moves:0,clears};renderPuzzle();
 }
+function celebratePuzzle(moves){
+  clearTimeout(puzzleCelebrationTimer);ui.puzzleClearDetail.textContent=`Veil Lights Clear・${moves}手`;ui.puzzleCelebration.hidden=false;
+  void ui.puzzleCelebration.offsetWidth;ui.puzzleCelebration.classList.add('show');
+  puzzleCelebrationTimer=setTimeout(()=>newPuzzle(),3200);
+}
 function playPuzzle(index){
   const game=state.puzzle;if(!game)return;togglePuzzleCell(index);game.moves++;renderPuzzle();
-  if(!game.board.some(Boolean)){const best=Number(localStorage.getItem('veilframe_lights_best'))||0;if(!best||game.moves<best)localStorage.setItem('veilframe_lights_best',String(game.moves));game.clears++;showToast(`Veil Lights クリア・${game.moves}手`);setTimeout(()=>{if(!ui.puzzlePanel.hidden)newPuzzle();},650);}
+  if(!game.board.some(Boolean)){const best=Number(localStorage.getItem('veilframe_lights_best'))||0;if(!best||game.moves<best)localStorage.setItem('veilframe_lights_best',String(game.moves));game.clears++;renderPuzzle();celebratePuzzle(game.moves);}
 }
 function startPuzzle(){ui.puzzlePanel.hidden=false;if(!state.puzzle)newPuzzle(false);}
 function setBusy(busy,label=''){

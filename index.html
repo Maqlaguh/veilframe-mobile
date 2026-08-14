@@ -78,7 +78,13 @@
           <div id="puzzlePanel" class="puzzle-panel" hidden>
             <div class="puzzle-head"><strong>Veil Lights</strong><span id="puzzleScore">0手・0クリア</span></div>
             <p>押したマスと上下左右が反転。すべて暗くすればクリア。</p>
-            <div id="puzzleGrid" class="puzzle-grid" aria-label="ライトアウト"></div>
+            <div class="puzzle-stage">
+              <div id="puzzleGrid" class="puzzle-grid" aria-label="ライトアウト"></div>
+              <div id="puzzleCelebration" class="puzzle-celebration" role="status" aria-live="polite" hidden>
+                <strong>Congratulations!!</strong>
+                <span id="puzzleClearDetail">Veil Lights Clear</span>
+              </div>
+            </div>
             <div class="puzzle-foot"><span id="puzzleBest">最高記録: --</span><button id="puzzleReset">新しい盤面</button></div>
           </div>
         </section>

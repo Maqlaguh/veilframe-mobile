@@ -10,8 +10,8 @@ import {
 registerSW({ immediate: true });
 
 const $ = (id) => document.getElementById(id);
-const ui = Object.fromEntries(['toast','fileInput','video','stage','cropBox','emptyHint','fileInfo','playButton','seekBar','playbackTime','rotateLeft','rotateRight','rotationReset','rotationLabel','cropToggle','cropReset','cropPanel','cropLeft','cropRight','cropTop','cropBottom','cropLeftLabel','cropRightLabel','cropTopLabel','cropBottomLabel','cropInfo','cropApply','trimStart','trimEnd','startLabel','endLabel','startHere','endHere','trimReset','analyzeAudio','audioResult','audioMode','exportButton','cancelButton','saveButton','progress','progressLabel','status'].map(id => [id,$(id)]));
-const state = { file:null, input:null, url:null, duration:0, width:0, height:0, rotation:0, cropEnabled:false, audioStats:null, conversion:null, busy:false, outputFile:null, outputUrl:null };
+const ui = Object.fromEntries(['toast','fileInput','video','stage','cropBox','emptyHint','fileInfo','playButton','seekBar','playbackTime','rotateLeft','rotateRight','rotationReset','rotationLabel','cropToggle','cropReset','cropPanel','cropLeft','cropRight','cropTop','cropBottom','cropLeftLabel','cropRightLabel','cropTopLabel','cropBottomLabel','cropInfo','cropApply','trimStart','trimEnd','startLabel','endLabel','startHere','endHere','trimReset','analyzeAudio','audioResult','audioMode','exportPreset','presetInfo','exportButton','cancelButton','saveButton','progress','progressLabel','status','puzzlePanel','puzzleGrid','puzzleScore','puzzleBest','puzzleReset'].map(id => [id,$(id)]));
+const state = { file:null, input:null, url:null, duration:0, width:0, height:0, fps:0, rotation:0, cropEnabled:false, audioStats:null, conversion:null, busy:false, outputFile:null, outputUrl:null, puzzle:null };
 let toastTimer=null;
 
 function showToast(text){
@@ -63,6 +63,38 @@ function outputCrop(){
   const left=Math.floor(w*c.left/2)*2,top=Math.floor(h*c.top/2)*2,width=Math.max(2,Math.floor((w*(1-c.left-c.right))/2)*2),height=Math.max(2,Math.floor((h*(1-c.top-c.bottom))/2)*2);
   return {left,top,width,height};
 }
+const presets={
+  x:{quality:'high',maxFps:40,audioBitrate:128000,label:'最大40fps・Xの通常投稿仕様に収めます'},
+  high:{quality:'very-high',maxFps:null,audioBitrate:192000,label:'元の解像度とfpsを維持して高品質で書き出します'},
+  fast:{quality:'medium',maxFps:30,audioBitrate:96000,label:'最大720p・30fpsで処理時間を短縮します'}
+};
+function targetSize(width,height,presetName){
+  let maxWidth=Infinity,maxHeight=Infinity;
+  if(presetName==='x'){maxWidth=width>=height?1920:1200;maxHeight=width>=height?1200:1900;}
+  else if(presetName==='fast'){maxWidth=width>=height?1280:720;maxHeight=width>=height?720:1280;}
+  const scale=Math.min(1,maxWidth/width,maxHeight/height);return {width:Math.max(2,Math.floor(width*scale/2)*2),height:Math.max(2,Math.floor(height*scale/2)*2)};
+}
+function updatePreset(){ui.presetInfo.textContent=presets[ui.exportPreset.value].label;}
+
+function togglePuzzleCell(index,board=state.puzzle?.board){
+  if(!board)return;const row=Math.floor(index/5),column=index%5;
+  for(const [dr,dc] of [[0,0],[-1,0],[1,0],[0,-1],[0,1]]){const r=row+dr,c=column+dc;if(r>=0&&r<5&&c>=0&&c<5)board[r*5+c]=!board[r*5+c];}
+}
+function renderPuzzle(){
+  const game=state.puzzle;if(!game)return;ui.puzzleGrid.replaceChildren(...game.board.map((on,index)=>{const button=document.createElement('button');button.className=on?'light on':'light';button.type='button';button.ariaLabel=`マス ${index+1}`;button.addEventListener('click',()=>playPuzzle(index));return button;}));
+  ui.puzzleScore.textContent=`${game.moves}手・${game.clears}クリア`;const best=Number(localStorage.getItem('veilframe_lights_best'))||0;ui.puzzleBest.textContent=`最高記録: ${best?best+'手':'--'}`;
+}
+function newPuzzle(keepClears=true){
+  const clears=keepClears&&state.puzzle?state.puzzle.clears:0,board=Array(25).fill(false);let changes=10+Math.floor(Math.random()*8);
+  while(changes--)togglePuzzleCell(Math.floor(Math.random()*25),board);if(!board.some(Boolean))togglePuzzleCell(12,board);
+  state.puzzle={board,moves:0,clears};renderPuzzle();
+}
+function playPuzzle(index){
+  const game=state.puzzle;if(!game)return;togglePuzzleCell(index);game.moves++;renderPuzzle();
+  if(!game.board.some(Boolean)){const best=Number(localStorage.getItem('veilframe_lights_best'))||0;if(!best||game.moves<best)localStorage.setItem('veilframe_lights_best',String(game.moves));game.clears++;showToast(`Veil Lights クリア・${game.moves}手`);setTimeout(()=>{if(!ui.puzzlePanel.hidden)newPuzzle();},650);}
+}
+function startPuzzle(){ui.puzzlePanel.hidden=false;newPuzzle(false);}
+function stopPuzzle(){ui.puzzlePanel.hidden=true;state.puzzle=null;}
 function setBusy(busy,label=''){
   state.busy=busy; ui.fileInput.disabled=busy; ui.exportButton.hidden=busy; ui.cancelButton.hidden=!busy;
   ui.analyzeAudio.disabled=busy||!state.file; ui.audioMode.disabled=busy; if(label) setStatus(label);
@@ -77,7 +109,7 @@ async function openFile(file){
     if(!videoTrack) throw new Error('動画トラックが見つかりません');
     state.duration=await state.input.computeDuration(); state.rotation=0;
     const width=await videoTrack.getDisplayWidth(),height=await videoTrack.getDisplayHeight(),codec=await videoTrack.getCodec();state.width=width;state.height=height;resetCrop();
-    const stats=await videoTrack.computePacketStats(100); const channels=audioTrack?await audioTrack.getNumberOfChannels():0;
+    const stats=await videoTrack.computePacketStats(100);state.fps=stats.averagePacketRate||0; const channels=audioTrack?await audioTrack.getNumberOfChannels():0;
     ui.trimStart.max=ui.trimEnd.max=state.duration; ui.trimStart.value=0; ui.trimEnd.value=state.duration; updateTrim(); updateRotation();
     ui.seekBar.max=state.duration;ui.seekBar.value=0;updatePlayback();
     ui.fileInfo.textContent=`${width}×${height}｜${(stats.averagePacketRate||0).toFixed(2)} fps｜${String(codec).toUpperCase()}｜${time(state.duration)}｜音声 ${channels||'なし'}ch`;
@@ -127,16 +159,18 @@ function processAudio(sample){
 async function exportVideo(){
   if(!state.input||state.busy)return; clearOutput(); setBusy(true,'書き出し準備中…');ui.progress.value=0;ui.progressLabel.textContent='準備中';
   try{
+    const presetName=ui.exportPreset.value,preset=presets[presetName];
     const format=new Mp4OutputFormat({fastStart:'in-memory'}); const videoTrack=await state.input.getPrimaryVideoTrack(); const width=await videoTrack.getDisplayWidth(),height=await videoTrack.getDisplayHeight(),crop=outputCrop();
-    const videoCodec=await getFirstEncodableVideoCodec(['avc'],{width:crop?.width??(state.rotation%180?height:width),height:crop?.height??(state.rotation%180?width:height)}); const audioCodec=await getFirstEncodableAudioCodec(['aac']);
+    const sourceWidth=crop?.width??(state.rotation%180?height:width),sourceHeight=crop?.height??(state.rotation%180?width:height),outputSize=targetSize(sourceWidth,sourceHeight,presetName);
+    const videoCodec=await getFirstEncodableVideoCodec(['avc'],outputSize); const audioCodec=await getFirstEncodableAudioCodec(['aac']);
     if(!videoCodec)throw new Error('この端末ではH.264エンコードを開始できません');
     const target=new BufferTarget(); const output=new Output({format,target}); const mode=ui.audioMode.value;
-    const videoOptions={codec:'avc',quality:new Quality('high'),rotate:crop?0:state.rotation,allowRotationMetadata:false,hardwareAcceleration:'prefer-hardware',forceTranscode:true};
+    const videoOptions={codec:'avc',quality:new Quality(preset.quality),rotate:crop?0:state.rotation,allowRotationMetadata:false,hardwareAcceleration:'prefer-hardware',forceTranscode:true,...(preset.maxFps&&state.fps>preset.maxFps?{frameRate:preset.maxFps}:{})};
     if(crop){
       const fullWidth=state.rotation%180?height:width,fullHeight=state.rotation%180?width:height;
       const sourceCanvas=document.createElement('canvas');sourceCanvas.width=width;sourceCanvas.height=height;const sourceContext=sourceCanvas.getContext('2d',{alpha:false});
       const rotatedCanvas=document.createElement('canvas');rotatedCanvas.width=fullWidth;rotatedCanvas.height=fullHeight;const rotatedContext=rotatedCanvas.getContext('2d',{alpha:false});
-      const canvas=document.createElement('canvas');canvas.width=crop.width;canvas.height=crop.height;const context=canvas.getContext('2d',{alpha:false});
+      const canvas=document.createElement('canvas');canvas.width=outputSize.width;canvas.height=outputSize.height;const context=canvas.getContext('2d',{alpha:false});
       if(!sourceContext||!rotatedContext||!context)throw new Error('画面トリミング用Canvasを作成できません');
       videoOptions.process=sample=>{
         sourceContext.clearRect(0,0,width,height);sample.draw(sourceContext,0,0,width,height);
@@ -145,20 +179,23 @@ async function exportVideo(){
         else if(state.rotation===180){rotatedContext.translate(fullWidth,fullHeight);rotatedContext.rotate(Math.PI);}
         else if(state.rotation===270){rotatedContext.translate(0,fullHeight);rotatedContext.rotate(-Math.PI/2);}
         rotatedContext.drawImage(sourceCanvas,0,0);
-        context.clearRect(0,0,crop.width,crop.height);context.drawImage(rotatedCanvas,crop.left,crop.top,crop.width,crop.height,0,0,crop.width,crop.height);
+        context.clearRect(0,0,outputSize.width,outputSize.height);context.drawImage(rotatedCanvas,crop.left,crop.top,crop.width,crop.height,0,0,outputSize.width,outputSize.height);
         return canvas;
       };
-      videoOptions.processedWidth=crop.width;videoOptions.processedHeight=crop.height;
-      setStatus(`画面を ${crop.width}×${crop.height} に切り抜いて書き出します…`);
+      videoOptions.processedWidth=outputSize.width;videoOptions.processedHeight=outputSize.height;
+      setStatus(`画面を ${outputSize.width}×${outputSize.height} に切り抜いて書き出します…`);
+    }else if(outputSize.width!==sourceWidth||outputSize.height!==sourceHeight){
+      videoOptions.width=outputSize.width;videoOptions.height=outputSize.height;videoOptions.fit='fill';
     }
-    const options={input:state.input,output,tracks:'primary',trim:{start:Number(ui.trimStart.value),end:Number(ui.trimEnd.value)},video:videoOptions,audio:audioCodec?{codec:'aac',quality:new Quality({bitrate:192000}),forceTranscode:mode!=='none',...(mode!=='none'?{process:processAudio,processedNumberOfChannels:2}:{})}:{discard:true}};
+    const options={input:state.input,output,tracks:'primary',trim:{start:Number(ui.trimStart.value),end:Number(ui.trimEnd.value)},video:videoOptions,audio:audioCodec?{codec:'aac',quality:new Quality({bitrate:preset.audioBitrate}),forceTranscode:mode!=='none',...(mode!=='none'?{process:processAudio,processedNumberOfChannels:2}:{})}:{discard:true}};
     state.conversion=await Conversion.init(options);if(!state.conversion.isValid)throw new Error('変換できないトラックがあります');
+    startPuzzle();
     state.conversion.onProgress=value=>{ui.progress.value=Math.round(value*100);ui.progressLabel.textContent=`${Math.round(value*100)}%`;setStatus(`端末内でMP4を書き出し中… ${Math.round(value*100)}%`);};
     await state.conversion.execute(); const blob=new Blob([target.buffer],{type:'video/mp4'}); const outName=state.file.name.replace(/\.[^.]+$/,'')+'_edited.mp4';
     state.outputFile=new File([blob],outName,{type:'video/mp4'}); state.outputUrl=URL.createObjectURL(blob); ui.saveButton.hidden=false;
-    ui.progress.value=100;ui.progressLabel.textContent='完了';setStatus(`書き出し完了: ${(blob.size/1024/1024).toFixed(1)} MiB。「完成したMP4を保存・共有」を押してください。`);
+    ui.progress.value=100;ui.progressLabel.textContent='完了';setStatus(`書き出し完了: ${(blob.size/1024/1024).toFixed(1)} MiB。「完成したMP4を保存・共有」を押してください。`);showToast('書き出しが完了しました');
   }catch(error){if(error?.name!=='ConversionCanceledError')setStatus(`書き出し失敗: ${error.message}`);ui.progress.value=0;ui.progressLabel.textContent='停止/失敗';}
-  finally{state.conversion=null;setBusy(false);}
+  finally{state.conversion=null;stopPuzzle();setBusy(false);}
 }
 
 async function saveOutput(){
@@ -188,3 +225,4 @@ for(const item of [ui.cropLeft,ui.cropRight,ui.cropTop,ui.cropBottom])item.addEv
 ui.video.addEventListener('loadedmetadata',updateCrop);window.addEventListener('resize',updateCrop);
 ui.trimStart.addEventListener('input',updateTrim);ui.trimEnd.addEventListener('input',updateTrim);ui.startHere.addEventListener('click',()=>{ui.trimStart.value=ui.video.currentTime;updateTrim();});ui.endHere.addEventListener('click',()=>{ui.trimEnd.value=ui.video.currentTime;updateTrim();});ui.trimReset.addEventListener('click',()=>{ui.trimStart.value=0;ui.trimEnd.value=state.duration;updateTrim();});
 ui.analyzeAudio.addEventListener('click',analyzeAudio);ui.exportButton.addEventListener('click',exportVideo);ui.saveButton.addEventListener('click',saveOutput);ui.cancelButton.addEventListener('click',async()=>{if(state.conversion){setStatus('処理を停止中…');await state.conversion.cancel();}});
+ui.exportPreset.addEventListener('change',updatePreset);ui.puzzleReset.addEventListener('click',()=>newPuzzle());updatePreset();

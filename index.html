@@ -62,15 +62,29 @@
 
         <section class="card export-card">
           <div class="section-title"><h2>MP4書き出し</h2><span class="privacy">動画は端末外へ送信しません</span></div>
+          <label class="preset-label">書き出しプリセット
+            <select id="exportPreset">
+              <option value="x">X向け</option>
+              <option value="high">高画質</option>
+              <option value="fast">高速</option>
+            </select>
+          </label>
+          <p id="presetInfo" class="preset-info">最大40fps・Xの通常投稿仕様に収めます</p>
           <button id="exportButton" class="primary">H.264/AAC MP4を書き出す</button>
           <button id="cancelButton" class="danger" hidden>処理を停止</button>
           <button id="saveButton" class="save" hidden>完成したMP4を保存・共有</button>
           <div class="progress-line"><progress id="progress" max="100" value="0"></progress><span id="progressLabel">待機中</span></div>
           <p id="status" class="status">まず動画を開いてください</p>
+          <div id="puzzlePanel" class="puzzle-panel" hidden>
+            <div class="puzzle-head"><strong>Veil Lights</strong><span id="puzzleScore">0手・0クリア</span></div>
+            <p>押したマスと上下左右が反転。すべて暗くすればクリア。</p>
+            <div id="puzzleGrid" class="puzzle-grid" aria-label="ライトアウト"></div>
+            <div class="puzzle-foot"><span id="puzzleBest">最高記録: --</span><button id="puzzleReset">新しい盤面</button></div>
+          </div>
         </section>
 
         <section class="notice">
-          <strong>VeilFrame Lite 0.1</strong>　動画を端末外へ送信せず、回転・時間指定・画面トリミング・左右音声補正・MP4保存を行います。
+          <strong>VeilFrame Lite 0.2</strong>　動画を端末外へ送信せず、回転・時間指定・画面トリミング・左右音声補正・MP4保存を行います。
         </section>
       </main>
     </div>

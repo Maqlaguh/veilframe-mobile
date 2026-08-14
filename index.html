@@ -11,6 +11,7 @@
     <title>VeilFrame Mobile</title>
   </head>
   <body>
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
     <div id="app">
       <header class="app-header">
         <div class="brand"><img src="/veilframe-mobile/veilframe-icon.png" alt="" /><span>VeilFrame</span><small>Mobile Lab</small></div>
@@ -19,7 +20,7 @@
 
       <main>
         <section class="viewer card">
-          <div id="stage" class="stage"><video id="video" playsinline controls></video><p id="emptyHint">動画を開くと、ここで再生できます</p></div>
+          <div id="stage" class="stage"><video id="video" playsinline controls></video><div id="cropBox" class="crop-box" hidden></div><p id="emptyHint">動画を開くと、ここで再生できます</p></div>
           <div id="fileInfo" class="file-info">iOS 26 / Safari向け端末内処理テスト</div>
         </section>
 
@@ -28,6 +29,14 @@
           <div class="button-row">
             <button id="rotateLeft">左へ90°</button><button id="rotateRight">右へ90°</button>
             <button id="rotationReset">元の向き</button><span id="rotationLabel" class="value">0°</span>
+          </div>
+          <div class="crop-actions"><button id="cropToggle">画面トリミングを指定</button><button id="cropReset" hidden>切り抜きを解除</button></div>
+          <div id="cropPanel" class="crop-panel" hidden>
+            <label>左 <output id="cropLeftLabel">0%</output><input id="cropLeft" type="range" min="0" max="90" value="0" step="0.5" /></label>
+            <label>右 <output id="cropRightLabel">0%</output><input id="cropRight" type="range" min="0" max="90" value="0" step="0.5" /></label>
+            <label>上 <output id="cropTopLabel">0%</output><input id="cropTop" type="range" min="0" max="90" value="0" step="0.5" /></label>
+            <label>下 <output id="cropBottomLabel">0%</output><input id="cropBottom" type="range" min="0" max="90" value="0" step="0.5" /></label>
+            <p id="cropInfo">出力範囲: 全画面</p>
           </div>
           <div class="trim-grid">
             <label>開始 <output id="startLabel">00:00.0</output><input id="trimStart" type="range" min="0" max="1" value="0" step="0.01" /></label>

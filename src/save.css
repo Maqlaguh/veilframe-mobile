@@ -5,3 +5,44 @@
   border-color: #4ba66b;
   font-weight: 800;
 }
+
+.toast {
+  position: fixed;
+  z-index: 20;
+  top: calc(14px + env(safe-area-inset-top));
+  left: 50%;
+  max-width: calc(100vw - 32px);
+  padding: 11px 18px;
+  border: 1px solid #62bd80;
+  border-radius: 999px;
+  background: rgba(28, 72, 44, .96);
+  box-shadow: 0 10px 35px rgba(0, 0, 0, .38);
+  color: #e8ffef;
+  font-weight: 800;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate(-50%, -14px) scale(.96);
+  transition: opacity .24s ease, transform .28s ease;
+}
+
+.toast.show {
+  opacity: 1;
+  transform: translate(-50%, 0) scale(1);
+}
+
+.stage { position: relative; }
+.crop-box {
+  position: absolute;
+  z-index: 3;
+  border: 2px solid #c96cf0;
+  border-radius: 3px;
+  box-shadow: 0 0 0 200vmax rgba(0, 0, 0, .58), inset 0 0 0 1px rgba(255, 255, 255, .5);
+  pointer-events: none;
+}
+.crop-actions { display: flex; gap: 8px; margin-top: 12px; }
+.crop-panel { margin-top: 10px; padding: 11px; border: 1px solid #3e4551; border-radius: 9px; background: #171a20; }
+.crop-panel label { display: grid; grid-template-columns: 34px 1fr; gap: 5px; color: #cbd0d8; font-size: 13px; }
+.crop-panel output { text-align: right; }
+.crop-panel input { grid-column: 1 / -1; width: 100%; accent-color: #a84fd0; }
+.crop-panel p { margin: 5px 0 0; color: #bd91d4; font-size: 12px; }

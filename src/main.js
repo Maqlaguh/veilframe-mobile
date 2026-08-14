@@ -10,8 +10,14 @@ import {
 registerSW({ immediate: true });
 
 const $ = (id) => document.getElementById(id);
-const ui = Object.fromEntries(['fileInput','video','stage','emptyHint','fileInfo','rotateLeft','rotateRight','rotationReset','rotationLabel','trimStart','trimEnd','startLabel','endLabel','startHere','endHere','trimReset','analyzeAudio','audioResult','audioMode','exportButton','cancelButton','saveButton','progress','progressLabel','status'].map(id => [id,$(id)]));
-const state = { file:null, input:null, url:null, duration:0, rotation:0, audioStats:null, conversion:null, busy:false, outputFile:null, outputUrl:null };
+const ui = Object.fromEntries(['toast','fileInput','video','stage','cropBox','emptyHint','fileInfo','rotateLeft','rotateRight','rotationReset','rotationLabel','cropToggle','cropReset','cropPanel','cropLeft','cropRight','cropTop','cropBottom','cropLeftLabel','cropRightLabel','cropTopLabel','cropBottomLabel','cropInfo','trimStart','trimEnd','startLabel','endLabel','startHere','endHere','trimReset','analyzeAudio','audioResult','audioMode','exportButton','cancelButton','saveButton','progress','progressLabel','status'].map(id => [id,$(id)]));
+const state = { file:null, input:null, url:null, duration:0, width:0, height:0, rotation:0, cropEnabled:false, audioStats:null, conversion:null, busy:false, outputFile:null, outputUrl:null };
+let toastTimer=null;
+
+function showToast(text){
+  clearTimeout(toastTimer); ui.toast.textContent=text; ui.toast.classList.add('show');
+  toastTimer=setTimeout(()=>ui.toast.classList.remove('show'),2600);
+}
 
 function clearOutput(){
   if(state.outputUrl) URL.revokeObjectURL(state.outputUrl);
@@ -32,6 +38,29 @@ function updateRotation(){
   ui.rotationLabel.textContent=`${state.rotation}°`;
   ui.video.style.transform=`rotate(${state.rotation}deg)`;
   ui.stage.style.padding=state.rotation%180 ? '15% 0' : '0';
+  requestAnimationFrame(updateCrop);
+}
+function cropValues(){return {left:Number(ui.cropLeft.value)/100,right:Number(ui.cropRight.value)/100,top:Number(ui.cropTop.value)/100,bottom:Number(ui.cropBottom.value)/100};}
+function resetCrop(){
+  for(const item of [ui.cropLeft,ui.cropRight,ui.cropTop,ui.cropBottom])item.value=0;
+  state.cropEnabled=false;ui.cropPanel.hidden=true;ui.cropBox.hidden=true;ui.cropReset.hidden=true;ui.cropToggle.textContent='画面トリミングを指定';updateCrop();
+}
+function updateCrop(event){
+  if(event?.target){const opposite=event.target===ui.cropLeft?ui.cropRight:event.target===ui.cropRight?ui.cropLeft:event.target===ui.cropTop?ui.cropBottom:ui.cropTop;event.target.value=Math.min(Number(event.target.value),90-Number(opposite.value));}
+  const crop=cropValues();
+  ui.cropLeftLabel.value=`${crop.left*100}%`;ui.cropRightLabel.value=`${crop.right*100}%`;ui.cropTopLabel.value=`${crop.top*100}%`;ui.cropBottomLabel.value=`${crop.bottom*100}%`;
+  const rotatedWidth=state.rotation%180?state.height:state.width,rotatedHeight=state.rotation%180?state.width:state.height;
+  const outWidth=Math.max(2,Math.floor(rotatedWidth*(1-crop.left-crop.right)/2)*2),outHeight=Math.max(2,Math.floor(rotatedHeight*(1-crop.top-crop.bottom)/2)*2);
+  ui.cropInfo.textContent=state.cropEnabled?`出力範囲: ${outWidth}×${outHeight}`:'出力範囲: 全画面';
+  if(!state.cropEnabled||!state.file)return;
+  const stageRect=ui.stage.getBoundingClientRect(),videoRect=ui.video.getBoundingClientRect();
+  ui.cropBox.style.left=`${videoRect.left-stageRect.left+videoRect.width*crop.left}px`;ui.cropBox.style.top=`${videoRect.top-stageRect.top+videoRect.height*crop.top}px`;
+  ui.cropBox.style.width=`${videoRect.width*(1-crop.left-crop.right)}px`;ui.cropBox.style.height=`${videoRect.height*(1-crop.top-crop.bottom)}px`;
+}
+function outputCrop(){
+  if(!state.cropEnabled)return null;const c=cropValues(),w=state.rotation%180?state.height:state.width,h=state.rotation%180?state.width:state.height;
+  const left=Math.floor(w*c.left/2)*2,top=Math.floor(h*c.top/2)*2,width=Math.max(2,Math.floor((w*(1-c.left-c.right))/2)*2),height=Math.max(2,Math.floor((h*(1-c.top-c.bottom))/2)*2);
+  return {left,top,width,height};
 }
 function setBusy(busy,label=''){
   state.busy=busy; ui.fileInput.disabled=busy; ui.exportButton.hidden=busy; ui.cancelButton.hidden=!busy;
@@ -46,7 +75,7 @@ async function openFile(file){
     const videoTrack=await state.input.getPrimaryVideoTrack(); const audioTrack=await state.input.getPrimaryAudioTrack();
     if(!videoTrack) throw new Error('動画トラックが見つかりません');
     state.duration=await state.input.computeDuration(); state.rotation=0;
-    const width=await videoTrack.getDisplayWidth(),height=await videoTrack.getDisplayHeight(),codec=await videoTrack.getCodec();
+    const width=await videoTrack.getDisplayWidth(),height=await videoTrack.getDisplayHeight(),codec=await videoTrack.getCodec();state.width=width;state.height=height;resetCrop();
     const stats=await videoTrack.computePacketStats(100); const channels=audioTrack?await audioTrack.getNumberOfChannels():0;
     ui.trimStart.max=ui.trimEnd.max=state.duration; ui.trimStart.value=0; ui.trimEnd.value=state.duration; updateTrim(); updateRotation();
     ui.fileInfo.textContent=`${width}×${height}｜${(stats.averagePacketRate||0).toFixed(2)} fps｜${String(codec).toUpperCase()}｜${time(state.duration)}｜音声 ${channels||'なし'}ch`;
@@ -96,11 +125,11 @@ function processAudio(sample){
 async function exportVideo(){
   if(!state.input||state.busy)return; clearOutput(); setBusy(true,'書き出し準備中…');ui.progress.value=0;ui.progressLabel.textContent='準備中';
   try{
-    const format=new Mp4OutputFormat({fastStart:'in-memory'}); const videoTrack=await state.input.getPrimaryVideoTrack(); const width=await videoTrack.getDisplayWidth(),height=await videoTrack.getDisplayHeight();
-    const videoCodec=await getFirstEncodableVideoCodec(['avc'],{width:state.rotation%180?height:width,height:state.rotation%180?width:height}); const audioCodec=await getFirstEncodableAudioCodec(['aac']);
+    const format=new Mp4OutputFormat({fastStart:'in-memory'}); const videoTrack=await state.input.getPrimaryVideoTrack(); const width=await videoTrack.getDisplayWidth(),height=await videoTrack.getDisplayHeight(),crop=outputCrop();
+    const videoCodec=await getFirstEncodableVideoCodec(['avc'],{width:crop?.width??(state.rotation%180?height:width),height:crop?.height??(state.rotation%180?width:height)}); const audioCodec=await getFirstEncodableAudioCodec(['aac']);
     if(!videoCodec)throw new Error('この端末ではH.264エンコードを開始できません');
     const target=new BufferTarget(); const output=new Output({format,target}); const mode=ui.audioMode.value;
-    const options={input:state.input,output,tracks:'primary',trim:{start:Number(ui.trimStart.value),end:Number(ui.trimEnd.value)},video:{codec:'avc',quality:new Quality('high'),rotate:state.rotation,allowRotationMetadata:false,hardwareAcceleration:'prefer-hardware',forceTranscode:true},audio:audioCodec?{codec:'aac',quality:new Quality({bitrate:192000}),forceTranscode:mode!=='none',...(mode!=='none'?{process:processAudio,processedNumberOfChannels:2}:{})}:{discard:true}};
+    const options={input:state.input,output,tracks:'primary',trim:{start:Number(ui.trimStart.value),end:Number(ui.trimEnd.value)},video:{codec:'avc',quality:new Quality('high'),rotate:state.rotation,...(crop?{crop}:{}),allowRotationMetadata:false,hardwareAcceleration:'prefer-hardware',forceTranscode:true},audio:audioCodec?{codec:'aac',quality:new Quality({bitrate:192000}),forceTranscode:mode!=='none',...(mode!=='none'?{process:processAudio,processedNumberOfChannels:2}:{})}:{discard:true}};
     state.conversion=await Conversion.init(options);if(!state.conversion.isValid)throw new Error('変換できないトラックがあります');
     state.conversion.onProgress=value=>{ui.progress.value=Math.round(value*100);ui.progressLabel.textContent=`${Math.round(value*100)}%`;setStatus(`端末内でMP4を書き出し中… ${Math.round(value*100)}%`);};
     await state.conversion.execute(); const blob=new Blob([target.buffer],{type:'video/mp4'}); const outName=state.file.name.replace(/\.[^.]+$/,'')+'_edited.mp4';
@@ -116,9 +145,11 @@ async function saveOutput(){
     if(navigator.canShare?.({files:[state.outputFile]})){
       await navigator.share({files:[state.outputFile],title:'VeilFrame Mobile 書き出し'});
       setStatus(`保存・共有画面を開きました: ${state.outputFile.name}`);
+      showToast('保存が完了しました');
     }else{
       const link=document.createElement('a'); link.href=state.outputUrl; link.download=state.outputFile.name; document.body.appendChild(link); link.click(); link.remove();
       setStatus(`MP4の保存を開始しました: ${state.outputFile.name}`);
+      showToast('保存を開始しました');
     }
   }catch(error){
     if(error?.name!=='AbortError') setStatus(`保存画面を開けませんでした: ${error.message}`);
@@ -127,5 +158,8 @@ async function saveOutput(){
 
 ui.fileInput.addEventListener('change',event=>openFile(event.target.files[0]));
 ui.rotateLeft.addEventListener('click',()=>{state.rotation=(state.rotation+270)%360;updateRotation();});ui.rotateRight.addEventListener('click',()=>{state.rotation=(state.rotation+90)%360;updateRotation();});ui.rotationReset.addEventListener('click',()=>{state.rotation=0;updateRotation();});
+ui.cropToggle.addEventListener('click',()=>{state.cropEnabled=true;ui.cropPanel.hidden=false;ui.cropBox.hidden=false;ui.cropReset.hidden=false;ui.cropToggle.textContent='切り抜き範囲を調整中';updateCrop();});ui.cropReset.addEventListener('click',resetCrop);
+for(const item of [ui.cropLeft,ui.cropRight,ui.cropTop,ui.cropBottom])item.addEventListener('input',updateCrop);
+ui.video.addEventListener('loadedmetadata',updateCrop);window.addEventListener('resize',updateCrop);
 ui.trimStart.addEventListener('input',updateTrim);ui.trimEnd.addEventListener('input',updateTrim);ui.startHere.addEventListener('click',()=>{ui.trimStart.value=ui.video.currentTime;updateTrim();});ui.endHere.addEventListener('click',()=>{ui.trimEnd.value=ui.video.currentTime;updateTrim();});ui.trimReset.addEventListener('click',()=>{ui.trimStart.value=0;ui.trimEnd.value=state.duration;updateTrim();});
 ui.analyzeAudio.addEventListener('click',analyzeAudio);ui.exportButton.addEventListener('click',exportVideo);ui.saveButton.addEventListener('click',saveOutput);ui.cancelButton.addEventListener('click',async()=>{if(state.conversion){setStatus('処理を停止中…');await state.conversion.cancel();}});

@@ -93,8 +93,7 @@ function playPuzzle(index){
   const game=state.puzzle;if(!game)return;togglePuzzleCell(index);game.moves++;renderPuzzle();
   if(!game.board.some(Boolean)){const best=Number(localStorage.getItem('veilframe_lights_best'))||0;if(!best||game.moves<best)localStorage.setItem('veilframe_lights_best',String(game.moves));game.clears++;showToast(`Veil Lights クリア・${game.moves}手`);setTimeout(()=>{if(!ui.puzzlePanel.hidden)newPuzzle();},650);}
 }
-function startPuzzle(){ui.puzzlePanel.hidden=false;newPuzzle(false);}
-function stopPuzzle(){ui.puzzlePanel.hidden=true;state.puzzle=null;}
+function startPuzzle(){ui.puzzlePanel.hidden=false;if(!state.puzzle)newPuzzle(false);}
 function setBusy(busy,label=''){
   state.busy=busy; ui.fileInput.disabled=busy; ui.exportButton.hidden=busy; ui.cancelButton.hidden=!busy;
   ui.analyzeAudio.disabled=busy||!state.file; ui.audioMode.disabled=busy; if(label) setStatus(label);
@@ -195,7 +194,7 @@ async function exportVideo(){
     state.outputFile=new File([blob],outName,{type:'video/mp4'}); state.outputUrl=URL.createObjectURL(blob); ui.saveButton.hidden=false;
     ui.progress.value=100;ui.progressLabel.textContent='完了';setStatus(`書き出し完了: ${(blob.size/1024/1024).toFixed(1)} MiB。「完成したMP4を保存・共有」を押してください。`);showToast('書き出しが完了しました');
   }catch(error){if(error?.name!=='ConversionCanceledError')setStatus(`書き出し失敗: ${error.message}`);ui.progress.value=0;ui.progressLabel.textContent='停止/失敗';}
-  finally{state.conversion=null;stopPuzzle();setBusy(false);}
+  finally{state.conversion=null;setBusy(false);}
 }
 
 async function saveOutput(){

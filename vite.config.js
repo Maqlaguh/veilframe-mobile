@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['veilframe-icon.png'],
+      includeAssets: ['veilframe-icon.svg'],
       manifest: {
         name: 'VeilFrame Mobile',
         short_name: 'VeilFrame',
@@ -16,7 +16,7 @@ export default defineConfig({
         display: 'standalone',
         orientation: 'any',
         icons: [
-          { src: 'veilframe-icon.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' }
+          { src: 'veilframe-icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any maskable' }
         ]
       },
       workbox: {

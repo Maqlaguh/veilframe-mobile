@@ -20,7 +20,8 @@
 
       <main>
         <section class="viewer card">
-          <div id="stage" class="stage"><video id="video" playsinline controls></video><div id="cropBox" class="crop-box" hidden></div><p id="emptyHint">動画を開くと、ここで再生できます</p></div>
+          <div id="stage" class="stage"><video id="video" playsinline></video><div id="cropBox" class="crop-box" hidden></div><p id="emptyHint">動画を開くと、ここで再生できます</p></div>
+          <div class="player-controls"><button id="playButton">再生</button><input id="seekBar" aria-label="再生位置" type="range" min="0" max="1" value="0" step="0.01" /><span id="playbackTime">00:00.0 / 00:00.0</span></div>
           <div id="fileInfo" class="file-info">iOS 26対応・端末内処理</div>
         </section>
 

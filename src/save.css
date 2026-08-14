@@ -47,3 +47,7 @@
 .crop-panel input { grid-column: 1 / -1; width: 100%; accent-color: #a84fd0; }
 .crop-panel p { margin: 5px 0 0; color: #bd91d4; font-size: 12px; }
 .crop-apply { width: 100%; margin-top: 10px; background: #74349b; border-color: #b15fd3; font-weight: 800; }
+.player-controls { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; padding: 8px 10px; background: #15181d; border-top: 1px solid #303640; }
+.player-controls button { padding: 7px 11px; }
+.player-controls input { min-width: 0; width: 100%; accent-color: #a84fd0; }
+.player-controls span { color: #c7ccd5; font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; }

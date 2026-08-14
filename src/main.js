@@ -131,9 +131,15 @@ async function exportVideo(){
     const target=new BufferTarget(); const output=new Output({format,target}); const mode=ui.audioMode.value;
     const videoOptions={codec:'avc',quality:new Quality('high'),rotate:state.rotation,allowRotationMetadata:false,hardwareAcceleration:'prefer-hardware',forceTranscode:true};
     if(crop){
+      const fullWidth=state.rotation%180?height:width,fullHeight=state.rotation%180?width:height;
+      const sourceCanvas=document.createElement('canvas');sourceCanvas.width=fullWidth;sourceCanvas.height=fullHeight;const sourceContext=sourceCanvas.getContext('2d',{alpha:false});
       const canvas=document.createElement('canvas');canvas.width=crop.width;canvas.height=crop.height;const context=canvas.getContext('2d',{alpha:false});
-      if(!context)throw new Error('画面トリミング用Canvasを作成できません');
-      videoOptions.process=sample=>{sample.draw(context,crop.left,crop.top,crop.width,crop.height,0,0,crop.width,crop.height);return canvas;};
+      if(!sourceContext||!context)throw new Error('画面トリミング用Canvasを作成できません');
+      videoOptions.process=sample=>{
+        sourceContext.clearRect(0,0,fullWidth,fullHeight);sample.draw(sourceContext,0,0,fullWidth,fullHeight);
+        context.clearRect(0,0,crop.width,crop.height);context.drawImage(sourceCanvas,crop.left,crop.top,crop.width,crop.height,0,0,crop.width,crop.height);
+        return canvas;
+      };
       videoOptions.processedWidth=crop.width;videoOptions.processedHeight=crop.height;
       setStatus(`画面を ${crop.width}×${crop.height} に切り抜いて書き出します…`);
     }

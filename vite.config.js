@@ -8,8 +8,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['veilframe-icon.png'],
       manifest: {
-        name: 'VeilFrame Mobile',
-        short_name: 'VeilFrame',
+        name: 'VeilFrame Lite',
+        short_name: 'VeilFrame Lite',
         description: '端末内で動画を回転・トリム・音声補正するモバイル編集ツール',
         theme_color: '#17191e',
         background_color: '#17191e',

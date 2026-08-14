@@ -157,7 +157,7 @@ async function saveOutput(){
   if(!state.outputFile)return;
   try{
     if(navigator.canShare?.({files:[state.outputFile]})){
-      await navigator.share({files:[state.outputFile],title:'VeilFrame Mobile 書き出し'});
+      await navigator.share({files:[state.outputFile],title:'VeilFrame Lite 書き出し'});
       setStatus(`保存・共有画面を開きました: ${state.outputFile.name}`);
       showToast('保存が完了しました');
     }else{

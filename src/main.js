@@ -1,4 +1,5 @@
 import './style.css';
+import './save.css';
 import { registerSW } from 'virtual:pwa-register';
 import {
   ALL_FORMATS, AudioSample, AudioSampleSink, BlobSource, BufferTarget,
@@ -9,8 +10,13 @@ import {
 registerSW({ immediate: true });
 
 const $ = (id) => document.getElementById(id);
-const ui = Object.fromEntries(['fileInput','video','stage','emptyHint','fileInfo','rotateLeft','rotateRight','rotationReset','rotationLabel','trimStart','trimEnd','startLabel','endLabel','startHere','endHere','trimReset','analyzeAudio','audioResult','audioMode','exportButton','cancelButton','progress','progressLabel','status'].map(id => [id,$(id)]));
-const state = { file:null, input:null, url:null, duration:0, rotation:0, audioStats:null, conversion:null, busy:false };
+const ui = Object.fromEntries(['fileInput','video','stage','emptyHint','fileInfo','rotateLeft','rotateRight','rotationReset','rotationLabel','trimStart','trimEnd','startLabel','endLabel','startHere','endHere','trimReset','analyzeAudio','audioResult','audioMode','exportButton','cancelButton','saveButton','progress','progressLabel','status'].map(id => [id,$(id)]));
+const state = { file:null, input:null, url:null, duration:0, rotation:0, audioStats:null, conversion:null, busy:false, outputFile:null, outputUrl:null };
+
+function clearOutput(){
+  if(state.outputUrl) URL.revokeObjectURL(state.outputUrl);
+  state.outputFile=null; state.outputUrl=null; ui.saveButton.hidden=true;
+}
 
 function time(value){
   value=Math.max(0,Number(value)||0); const minutes=Math.floor(value/60); const seconds=value-minutes*60;
@@ -33,7 +39,7 @@ function setBusy(busy,label=''){
 }
 
 async function openFile(file){
-  if(!file) return; if(state.url) URL.revokeObjectURL(state.url);
+  if(!file) return; clearOutput(); if(state.url) URL.revokeObjectURL(state.url);
   state.file=file; state.url=URL.createObjectURL(file); state.input=new Input({formats:ALL_FORMATS,source:new BlobSource(file)});
   ui.video.src=state.url; ui.video.style.display='block'; ui.emptyHint.hidden=true; setStatus('動画情報を読込中…');
   try{
@@ -88,7 +94,7 @@ function processAudio(sample){
 }
 
 async function exportVideo(){
-  if(!state.input||state.busy)return; setBusy(true,'書き出し準備中…');ui.progress.value=0;ui.progressLabel.textContent='準備中';
+  if(!state.input||state.busy)return; clearOutput(); setBusy(true,'書き出し準備中…');ui.progress.value=0;ui.progressLabel.textContent='準備中';
   try{
     const format=new Mp4OutputFormat({fastStart:'in-memory'}); const videoTrack=await state.input.getPrimaryVideoTrack(); const width=await videoTrack.getDisplayWidth(),height=await videoTrack.getDisplayHeight();
     const videoCodec=await getFirstEncodableVideoCodec(['avc'],{width:state.rotation%180?height:width,height:state.rotation%180?width:height}); const audioCodec=await getFirstEncodableAudioCodec(['aac']);
@@ -97,14 +103,29 @@ async function exportVideo(){
     const options={input:state.input,output,tracks:'primary',trim:{start:Number(ui.trimStart.value),end:Number(ui.trimEnd.value)},video:{codec:'avc',quality:new Quality('high'),rotate:state.rotation,allowRotationMetadata:false,hardwareAcceleration:'prefer-hardware',forceTranscode:true},audio:audioCodec?{codec:'aac',quality:new Quality({bitrate:192000}),forceTranscode:mode!=='none',...(mode!=='none'?{process:processAudio,processedNumberOfChannels:2}:{})}:{discard:true}};
     state.conversion=await Conversion.init(options);if(!state.conversion.isValid)throw new Error('変換できないトラックがあります');
     state.conversion.onProgress=value=>{ui.progress.value=Math.round(value*100);ui.progressLabel.textContent=`${Math.round(value*100)}%`;setStatus(`端末内でMP4を書き出し中… ${Math.round(value*100)}%`);};
-    await state.conversion.execute(); const blob=new Blob([target.buffer],{type:'video/mp4'}); const outName=state.file.name.replace(/\.[^.]+$/,'')+'_edited.mp4'; const outFile=new File([blob],outName,{type:'video/mp4'});
-    ui.progress.value=100;ui.progressLabel.textContent='完了';setStatus(`書き出し完了: ${(blob.size/1024/1024).toFixed(1)} MiB`);
-    if(navigator.canShare?.({files:[outFile]}))await navigator.share({files:[outFile],title:'VeilFrame Mobile 書き出し'});else{const link=document.createElement('a');link.href=URL.createObjectURL(blob);link.download=outName;link.click();setTimeout(()=>URL.revokeObjectURL(link.href),60000);}
+    await state.conversion.execute(); const blob=new Blob([target.buffer],{type:'video/mp4'}); const outName=state.file.name.replace(/\.[^.]+$/,'')+'_edited.mp4';
+    state.outputFile=new File([blob],outName,{type:'video/mp4'}); state.outputUrl=URL.createObjectURL(blob); ui.saveButton.hidden=false;
+    ui.progress.value=100;ui.progressLabel.textContent='完了';setStatus(`書き出し完了: ${(blob.size/1024/1024).toFixed(1)} MiB。「完成したMP4を保存・共有」を押してください。`);
   }catch(error){if(error?.name!=='ConversionCanceledError')setStatus(`書き出し失敗: ${error.message}`);ui.progress.value=0;ui.progressLabel.textContent='停止/失敗';}
   finally{state.conversion=null;setBusy(false);}
+}
+
+async function saveOutput(){
+  if(!state.outputFile)return;
+  try{
+    if(navigator.canShare?.({files:[state.outputFile]})){
+      await navigator.share({files:[state.outputFile],title:'VeilFrame Mobile 書き出し'});
+      setStatus(`保存・共有画面を開きました: ${state.outputFile.name}`);
+    }else{
+      const link=document.createElement('a'); link.href=state.outputUrl; link.download=state.outputFile.name; document.body.appendChild(link); link.click(); link.remove();
+      setStatus(`MP4の保存を開始しました: ${state.outputFile.name}`);
+    }
+  }catch(error){
+    if(error?.name!=='AbortError') setStatus(`保存画面を開けませんでした: ${error.message}`);
+  }
 }
 
 ui.fileInput.addEventListener('change',event=>openFile(event.target.files[0]));
 ui.rotateLeft.addEventListener('click',()=>{state.rotation=(state.rotation+270)%360;updateRotation();});ui.rotateRight.addEventListener('click',()=>{state.rotation=(state.rotation+90)%360;updateRotation();});ui.rotationReset.addEventListener('click',()=>{state.rotation=0;updateRotation();});
 ui.trimStart.addEventListener('input',updateTrim);ui.trimEnd.addEventListener('input',updateTrim);ui.startHere.addEventListener('click',()=>{ui.trimStart.value=ui.video.currentTime;updateTrim();});ui.endHere.addEventListener('click',()=>{ui.trimEnd.value=ui.video.currentTime;updateTrim();});ui.trimReset.addEventListener('click',()=>{ui.trimStart.value=0;ui.trimEnd.value=state.duration;updateTrim();});
-ui.analyzeAudio.addEventListener('click',analyzeAudio);ui.exportButton.addEventListener('click',exportVideo);ui.cancelButton.addEventListener('click',async()=>{if(state.conversion){setStatus('処理を停止中…');await state.conversion.cancel();}});
+ui.analyzeAudio.addEventListener('click',analyzeAudio);ui.exportButton.addEventListener('click',exportVideo);ui.saveButton.addEventListener('click',saveOutput);ui.cancelButton.addEventListener('click',async()=>{if(state.conversion){setStatus('処理を停止中…');await state.conversion.cancel();}});

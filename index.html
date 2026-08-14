@@ -6,13 +6,14 @@
     <meta name="theme-color" content="#17191e" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <link rel="icon" href="/veilframe-mobile/veilframe-icon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/veilframe-mobile/veilframe-icon.png" type="image/png" />
+    <link rel="apple-touch-icon" href="/veilframe-mobile/veilframe-icon.png" />
     <title>VeilFrame Mobile</title>
   </head>
   <body>
     <div id="app">
       <header class="app-header">
-        <div class="brand"><img src="/veilframe-mobile/veilframe-icon.svg" alt="" /><span>VeilFrame</span><small>Mobile Lab</small></div>
+        <div class="brand"><img src="/veilframe-mobile/veilframe-icon.png" alt="" /><span>VeilFrame</span><small>Mobile Lab</small></div>
         <label class="file-button">動画を開く<input id="fileInput" type="file" accept="video/*,.mp4,.mov,.m4v" /></label>
       </header>
 
@@ -52,6 +53,7 @@
           <div class="section-title"><h2>MP4書き出し</h2><span class="privacy">動画は端末外へ送信しません</span></div>
           <button id="exportButton" class="primary">H.264/AAC MP4を書き出す</button>
           <button id="cancelButton" class="danger" hidden>処理を停止</button>
+          <button id="saveButton" class="save" hidden>完成したMP4を保存・共有</button>
           <div class="progress-line"><progress id="progress" max="100" value="0"></progress><span id="progressLabel">待機中</span></div>
           <p id="status" class="status">まず動画を開いてください</p>
         </section>

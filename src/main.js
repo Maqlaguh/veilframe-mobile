@@ -129,7 +129,15 @@ async function exportVideo(){
     const videoCodec=await getFirstEncodableVideoCodec(['avc'],{width:crop?.width??(state.rotation%180?height:width),height:crop?.height??(state.rotation%180?width:height)}); const audioCodec=await getFirstEncodableAudioCodec(['aac']);
     if(!videoCodec)throw new Error('この端末ではH.264エンコードを開始できません');
     const target=new BufferTarget(); const output=new Output({format,target}); const mode=ui.audioMode.value;
-    const options={input:state.input,output,tracks:'primary',trim:{start:Number(ui.trimStart.value),end:Number(ui.trimEnd.value)},video:{codec:'avc',quality:new Quality('high'),rotate:state.rotation,...(crop?{crop}:{}),allowRotationMetadata:false,hardwareAcceleration:'prefer-hardware',forceTranscode:true},audio:audioCodec?{codec:'aac',quality:new Quality({bitrate:192000}),forceTranscode:mode!=='none',...(mode!=='none'?{process:processAudio,processedNumberOfChannels:2}:{})}:{discard:true}};
+    const videoOptions={codec:'avc',quality:new Quality('high'),rotate:state.rotation,allowRotationMetadata:false,hardwareAcceleration:'prefer-hardware',forceTranscode:true};
+    if(crop){
+      const canvas=document.createElement('canvas');canvas.width=crop.width;canvas.height=crop.height;const context=canvas.getContext('2d',{alpha:false});
+      if(!context)throw new Error('画面トリミング用Canvasを作成できません');
+      videoOptions.process=sample=>{sample.draw(context,crop.left,crop.top,crop.width,crop.height,0,0,crop.width,crop.height);return canvas;};
+      videoOptions.processedWidth=crop.width;videoOptions.processedHeight=crop.height;
+      setStatus(`画面を ${crop.width}×${crop.height} に切り抜いて書き出します…`);
+    }
+    const options={input:state.input,output,tracks:'primary',trim:{start:Number(ui.trimStart.value),end:Number(ui.trimEnd.value)},video:videoOptions,audio:audioCodec?{codec:'aac',quality:new Quality({bitrate:192000}),forceTranscode:mode!=='none',...(mode!=='none'?{process:processAudio,processedNumberOfChannels:2}:{})}:{discard:true}};
     state.conversion=await Conversion.init(options);if(!state.conversion.isValid)throw new Error('変換できないトラックがあります');
     state.conversion.onProgress=value=>{ui.progress.value=Math.round(value*100);ui.progressLabel.textContent=`${Math.round(value*100)}%`;setStatus(`端末内でMP4を書き出し中… ${Math.round(value*100)}%`);};
     await state.conversion.execute(); const blob=new Blob([target.buffer],{type:'video/mp4'}); const outName=state.file.name.replace(/\.[^.]+$/,'')+'_edited.mp4';

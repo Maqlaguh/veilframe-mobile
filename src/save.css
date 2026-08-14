@@ -46,3 +46,4 @@
 .crop-panel output { text-align: right; }
 .crop-panel input { grid-column: 1 / -1; width: 100%; accent-color: #a84fd0; }
 .crop-panel p { margin: 5px 0 0; color: #bd91d4; font-size: 12px; }
+.crop-apply { width: 100%; margin-top: 10px; background: #74349b; border-color: #b15fd3; font-weight: 800; }

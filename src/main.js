@@ -178,12 +178,21 @@ async function exportVideo(){
     const target=new BufferTarget(); const output=new Output({format,target}); const mode=ui.audioMode.value;
     const videoOptions={codec:'avc',quality:new Quality(preset.quality),rotate:state.rotation,allowRotationMetadata:false,hardwareAcceleration:'prefer-hardware',forceTranscode:true,...(preset.maxFps&&state.fps>preset.maxFps?{frameRate:preset.maxFps}:{})};
     if(crop){
+      const fullWidth=state.rotation%180?height:width,fullHeight=state.rotation%180?width:height;
+      const sourceCanvas=document.createElement('canvas');sourceCanvas.width=width;sourceCanvas.height=height;const sourceContext=sourceCanvas.getContext('2d',{alpha:false});
+      const rotatedCanvas=document.createElement('canvas');rotatedCanvas.width=fullWidth;rotatedCanvas.height=fullHeight;const rotatedContext=rotatedCanvas.getContext('2d',{alpha:false});
       const canvas=document.createElement('canvas');canvas.width=outputSize.width;canvas.height=outputSize.height;const context=canvas.getContext('2d',{alpha:false});
-      if(!context)throw new Error('画面トリミング用Canvasを作成できません');
+      if(!sourceContext||!rotatedContext||!context)throw new Error('画面トリミング用Canvasを作成できません');
       videoOptions.rotate=0;
       videoOptions.process=sample=>{
+        sourceContext.clearRect(0,0,width,height);sample.draw(sourceContext,0,0,width,height);
+        rotatedContext.setTransform(1,0,0,1,0,0);rotatedContext.clearRect(0,0,fullWidth,fullHeight);
+        if(state.rotation===90){rotatedContext.translate(fullWidth,0);rotatedContext.rotate(Math.PI/2);}
+        else if(state.rotation===180){rotatedContext.translate(fullWidth,fullHeight);rotatedContext.rotate(Math.PI);}
+        else if(state.rotation===270){rotatedContext.translate(0,fullHeight);rotatedContext.rotate(-Math.PI/2);}
+        rotatedContext.drawImage(sourceCanvas,0,0);
         context.clearRect(0,0,outputSize.width,outputSize.height);
-        sample.drawWithFit(context,{fit:'fill',rotation:(sample.rotation+state.rotation)%360,crop});
+        context.drawImage(rotatedCanvas,crop.left,crop.top,crop.width,crop.height,0,0,outputSize.width,outputSize.height);
         return canvas;
       };
       videoOptions.processedWidth=outputSize.width;videoOptions.processedHeight=outputSize.height;

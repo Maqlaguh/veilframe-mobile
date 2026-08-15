@@ -176,11 +176,19 @@ async function exportVideo(){
     const videoCodec=await getFirstEncodableVideoCodec(['avc'],outputSize); const audioCodec=await getFirstEncodableAudioCodec(['aac']);
     if(!videoCodec)throw new Error('この端末ではH.264エンコードを開始できません');
     const target=new BufferTarget(); const output=new Output({format,target}); const mode=ui.audioMode.value;
-    const videoOptions={codec:'avc',quality:new Quality(preset.quality),rotate:state.rotation,allowRotationMetadata:false,hardwareAcceleration:'prefer-hardware',forceTranscode:true,...(crop?{crop}:{}),...(preset.maxFps&&state.fps>preset.maxFps?{frameRate:preset.maxFps}:{})};
+    const videoOptions={codec:'avc',quality:new Quality(preset.quality),rotate:state.rotation,allowRotationMetadata:false,hardwareAcceleration:'prefer-hardware',forceTranscode:true,...(preset.maxFps&&state.fps>preset.maxFps?{frameRate:preset.maxFps}:{})};
     if(crop){
+      const canvas=document.createElement('canvas');canvas.width=outputSize.width;canvas.height=outputSize.height;const context=canvas.getContext('2d',{alpha:false});
+      if(!context)throw new Error('画面トリミング用Canvasを作成できません');
+      videoOptions.rotate=0;
+      videoOptions.process=sample=>{
+        context.clearRect(0,0,outputSize.width,outputSize.height);
+        sample.drawWithFit(context,{fit:'fill',rotation:(sample.rotation+state.rotation)%360,crop});
+        return canvas;
+      };
+      videoOptions.processedWidth=outputSize.width;videoOptions.processedHeight=outputSize.height;
       setStatus(`画面を ${outputSize.width}×${outputSize.height} に切り抜いて書き出します…`);
-    }
-    if(outputSize.width!==sourceWidth||outputSize.height!==sourceHeight){
+    }else if(outputSize.width!==sourceWidth||outputSize.height!==sourceHeight){
       videoOptions.width=outputSize.width;videoOptions.height=outputSize.height;videoOptions.fit='fill';
     }
     const options={input:state.input,output,tracks:'primary',trim:{start:Number(ui.trimStart.value),end:Number(ui.trimEnd.value)},video:videoOptions,audio:audioCodec?{codec:'aac',quality:new Quality({bitrate:preset.audioBitrate}),forceTranscode:mode!=='none',...(mode!=='none'?{process:processAudio,processedNumberOfChannels:2}:{})}:{discard:true}};

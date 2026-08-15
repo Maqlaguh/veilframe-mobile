@@ -10,7 +10,7 @@ import {
 registerSW({ immediate: true });
 
 const $ = (id) => document.getElementById(id);
-const ui = Object.fromEntries(['toast','fileInput','video','stage','cropBox','emptyHint','fileInfo','playButton','seekBar','playbackTime','rotateLeft','rotateRight','rotationReset','rotationLabel','cropToggle','cropReset','cropPanel','cropLeft','cropRight','cropTop','cropBottom','cropLeftLabel','cropRightLabel','cropTopLabel','cropBottomLabel','cropInfo','cropApply','trimStart','trimEnd','startLabel','endLabel','startHere','endHere','trimReset','analyzeAudio','audioResult','audioMode','exportPreset','presetInfo','exportButton','cancelButton','saveButton','progress','progressLabel','status','puzzlePanel','puzzleGrid','puzzleScore','puzzleBest','puzzleReset','puzzleCelebration','puzzleClearDetail'].map(id => [id,$(id)]));
+const ui = Object.fromEntries(['toast','fileInput','video','videoViewport','stage','cropBox','emptyHint','fileInfo','playButton','seekBar','playbackTime','rotateLeft','rotateRight','rotationReset','rotationLabel','cropToggle','cropReset','cropPanel','cropLeft','cropRight','cropTop','cropBottom','cropLeftLabel','cropRightLabel','cropTopLabel','cropBottomLabel','cropInfo','cropApply','trimStart','trimEnd','startLabel','endLabel','startHere','endHere','trimReset','analyzeAudio','audioResult','audioMode','exportPreset','presetInfo','exportButton','cancelButton','saveButton','progress','progressLabel','status','puzzlePanel','puzzleGrid','puzzleScore','puzzleBest','puzzleReset','puzzleCelebration','puzzleClearDetail'].map(id => [id,$(id)]));
 const state = { file:null, input:null, url:null, duration:0, width:0, height:0, fps:0, rotation:0, cropEnabled:false, audioStats:null, conversion:null, busy:false, outputFile:null, outputUrl:null, puzzle:null };
 let toastTimer=null,puzzleCelebrationTimer=null;
 
@@ -37,8 +37,14 @@ function updateTrim(){
 }
 function updateRotation(){
   ui.rotationLabel.textContent=`${state.rotation}°`;
-  ui.video.style.transform=`rotate(${state.rotation}deg)`;
-  ui.stage.style.padding=state.rotation%180 ? '15% 0' : '0';
+  const quarterTurn=state.rotation%180!==0;
+  const displayWidth=quarterTurn?state.height:state.width;
+  const displayHeight=quarterTurn?state.width:state.height;
+  const aspect=displayWidth&&displayHeight?displayWidth/displayHeight:16/9;
+  ui.videoViewport.style.setProperty('--preview-aspect',String(aspect));
+  ui.video.style.width=quarterTurn?`${100/aspect}%`:'100%';
+  ui.video.style.height=quarterTurn?`${100*aspect}%`:'100%';
+  ui.video.style.transform=`translate(-50%,-50%) rotate(${state.rotation}deg)`;
   requestAnimationFrame(updateCrop);
 }
 function cropValues(){return {left:Number(ui.cropLeft.value)/100,right:Number(ui.cropRight.value)/100,top:Number(ui.cropTop.value)/100,bottom:Number(ui.cropBottom.value)/100};}
@@ -54,9 +60,9 @@ function updateCrop(event){
   const outWidth=Math.max(2,Math.floor(rotatedWidth*(1-crop.left-crop.right)/2)*2),outHeight=Math.max(2,Math.floor(rotatedHeight*(1-crop.top-crop.bottom)/2)*2);
   ui.cropInfo.textContent=state.cropEnabled?`出力範囲: ${outWidth}×${outHeight}`:'出力範囲: 全画面';
   if(!state.cropEnabled||!state.file)return;
-  const stageRect=ui.stage.getBoundingClientRect(),videoRect=ui.video.getBoundingClientRect();
-  ui.cropBox.style.left=`${videoRect.left-stageRect.left+videoRect.width*crop.left}px`;ui.cropBox.style.top=`${videoRect.top-stageRect.top+videoRect.height*crop.top}px`;
-  ui.cropBox.style.width=`${videoRect.width*(1-crop.left-crop.right)}px`;ui.cropBox.style.height=`${videoRect.height*(1-crop.top-crop.bottom)}px`;
+  const viewportRect=ui.videoViewport.getBoundingClientRect();
+  ui.cropBox.style.left=`${viewportRect.width*crop.left}px`;ui.cropBox.style.top=`${viewportRect.height*crop.top}px`;
+  ui.cropBox.style.width=`${viewportRect.width*(1-crop.left-crop.right)}px`;ui.cropBox.style.height=`${viewportRect.height*(1-crop.top-crop.bottom)}px`;
 }
 function outputCrop(){
   if(!state.cropEnabled)return null;const c=cropValues(),w=state.rotation%180?state.height:state.width,h=state.rotation%180?state.width:state.height;
@@ -108,7 +114,7 @@ function setBusy(busy,label=''){
 async function openFile(file){
   if(!file) return; clearOutput(); if(state.url) URL.revokeObjectURL(state.url);
   state.file=file; state.url=URL.createObjectURL(file); state.input=new Input({formats:ALL_FORMATS,source:new BlobSource(file)});
-  ui.video.src=state.url; ui.video.style.display='block'; ui.emptyHint.hidden=true; setStatus('動画情報を読込中…');
+  ui.video.src=state.url; ui.video.style.display='block'; ui.videoViewport.hidden=false; ui.emptyHint.hidden=true; setStatus('動画情報を読込中…');
   try{
     const videoTrack=await state.input.getPrimaryVideoTrack(); const audioTrack=await state.input.getPrimaryAudioTrack();
     if(!videoTrack) throw new Error('動画トラックが見つかりません');
@@ -170,26 +176,11 @@ async function exportVideo(){
     const videoCodec=await getFirstEncodableVideoCodec(['avc'],outputSize); const audioCodec=await getFirstEncodableAudioCodec(['aac']);
     if(!videoCodec)throw new Error('この端末ではH.264エンコードを開始できません');
     const target=new BufferTarget(); const output=new Output({format,target}); const mode=ui.audioMode.value;
-    const videoOptions={codec:'avc',quality:new Quality(preset.quality),rotate:crop?0:state.rotation,allowRotationMetadata:false,hardwareAcceleration:'prefer-hardware',forceTranscode:true,...(preset.maxFps&&state.fps>preset.maxFps?{frameRate:preset.maxFps}:{})};
+    const videoOptions={codec:'avc',quality:new Quality(preset.quality),rotate:state.rotation,allowRotationMetadata:false,hardwareAcceleration:'prefer-hardware',forceTranscode:true,...(crop?{crop}:{}),...(preset.maxFps&&state.fps>preset.maxFps?{frameRate:preset.maxFps}:{})};
     if(crop){
-      const fullWidth=state.rotation%180?height:width,fullHeight=state.rotation%180?width:height;
-      const sourceCanvas=document.createElement('canvas');sourceCanvas.width=width;sourceCanvas.height=height;const sourceContext=sourceCanvas.getContext('2d',{alpha:false});
-      const rotatedCanvas=document.createElement('canvas');rotatedCanvas.width=fullWidth;rotatedCanvas.height=fullHeight;const rotatedContext=rotatedCanvas.getContext('2d',{alpha:false});
-      const canvas=document.createElement('canvas');canvas.width=outputSize.width;canvas.height=outputSize.height;const context=canvas.getContext('2d',{alpha:false});
-      if(!sourceContext||!rotatedContext||!context)throw new Error('画面トリミング用Canvasを作成できません');
-      videoOptions.process=sample=>{
-        sourceContext.clearRect(0,0,width,height);sample.draw(sourceContext,0,0,width,height);
-        rotatedContext.setTransform(1,0,0,1,0,0);rotatedContext.clearRect(0,0,fullWidth,fullHeight);
-        if(state.rotation===90){rotatedContext.translate(fullWidth,0);rotatedContext.rotate(Math.PI/2);}
-        else if(state.rotation===180){rotatedContext.translate(fullWidth,fullHeight);rotatedContext.rotate(Math.PI);}
-        else if(state.rotation===270){rotatedContext.translate(0,fullHeight);rotatedContext.rotate(-Math.PI/2);}
-        rotatedContext.drawImage(sourceCanvas,0,0);
-        context.clearRect(0,0,outputSize.width,outputSize.height);context.drawImage(rotatedCanvas,crop.left,crop.top,crop.width,crop.height,0,0,outputSize.width,outputSize.height);
-        return canvas;
-      };
-      videoOptions.processedWidth=outputSize.width;videoOptions.processedHeight=outputSize.height;
       setStatus(`画面を ${outputSize.width}×${outputSize.height} に切り抜いて書き出します…`);
-    }else if(outputSize.width!==sourceWidth||outputSize.height!==sourceHeight){
+    }
+    if(outputSize.width!==sourceWidth||outputSize.height!==sourceHeight){
       videoOptions.width=outputSize.width;videoOptions.height=outputSize.height;videoOptions.fit='fill';
     }
     const options={input:state.input,output,tracks:'primary',trim:{start:Number(ui.trimStart.value),end:Number(ui.trimEnd.value)},video:videoOptions,audio:audioCodec?{codec:'aac',quality:new Quality({bitrate:preset.audioBitrate}),forceTranscode:mode!=='none',...(mode!=='none'?{process:processAudio,processedNumberOfChannels:2}:{})}:{discard:true}};
